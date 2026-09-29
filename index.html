@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0878c9">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<title>ĂN GÌ EM MUA – Tính phí giao hàng</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#172033;background:#f2f6fb}
+body{margin:0;padding:16px}.app{max-width:620px;margin:auto;background:#fff;border-radius:20px;padding:20px;box-shadow:0 8px 30px #18345a16}
+h1{font-size:1.45rem;margin:0 0 6px;color:#0878c9}p{color:#64748b;margin-top:0}
+h2{font-size:1.05rem;margin:22px 0 10px}.field{display:grid;grid-template-columns:1fr 140px;gap:12px;align-items:center;margin:12px 0}
+label{font-size:.94rem}.field input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem}
+.check{display:flex;gap:10px;align-items:center;margin:13px 0}.check input{width:18px;height:18px}
+.result{background:#edf7ff;border-radius:14px;padding:16px;margin-top:20px}.line{display:flex;justify-content:space-between;gap:12px;margin:10px 0}.muted{color:#64748b}.total{font-size:1.8rem;font-weight:800;color:#0878c9}
+button{border:0;border-radius:12px;padding:13px 16px;font-size:1rem;font-weight:700;cursor:pointer;width:100%;margin-top:10px;background:#0878c9;color:#fff}.secondary{background:#e8eef5;color:#172033}
+small{color:#64748b;line-height:1.45;display:block;margin-top:12px}
+#map{height:300px;border-radius:14px;border:1px solid #cbd5e1;overflow:hidden;margin:12px 0}.map-status{font-size:.86rem;color:#475569;background:#f1f5f9;border-radius:10px;padding:10px;margin:8px 0}.install{background:#0f766e}.location-field{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;margin:12px 0}.location-field input{min-width:0;width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:10px;font-size:1rem}.gps-btn{width:auto;margin:0;padding:11px 12px;white-space:nowrap;font-size:.9rem}.gps-note{font-size:.8rem;color:#64748b;margin-top:4px}.history{margin-top:22px}.history-card{background:#f8fbff;border:1px solid #dbeafe;border-radius:12px;padding:12px;margin:10px 0}.history-head{display:flex;justify-content:space-between;gap:10px;align-items:start}.history-meta{font-size:.82rem;color:#64748b}.history-total{font-size:1.15rem;font-weight:800;color:#0878c9}.history-detail{font-size:.9rem;color:#475569;margin-top:6px}.delete-one{width:auto;margin:0;padding:7px 10px;font-size:.82rem;background:#e8eef5;color:#172033}.empty{color:#64748b;background:#f8fafc;padding:14px;border-radius:12px;text-align:center}
+@media(max-width:420px){.field{grid-template-columns:1fr 115px}.app{padding:16px}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>🛵 ĂN GÌ EM MUA</h1>
+<p>Công cụ tính phí giao hàng & mua hộ</p>
+<h2>Thông tin đơn hàng</h2>
+<div class="field"><label for="orderName">Tên khách / ghi chú (không bắt buộc)</label><input id="orderName" type="text" maxlength="60" placeholder="Ví dụ: Chị Lan - trà sữa"></div>
+<label for="pickupLocation">Vị trí lấy hàng</label>
+<div class="location-field"><input id="pickupLocation" type="text" maxlength="180" placeholder="Tên quán / nhập địa chỉ lấy hàng"><button class="gps-btn" type="button" id="pickupGps">📍 GPS vị trí lấy</button></div>
+<label for="dropoffLocation">Vị trí khách hàng</label>
+<div class="location-field"><input id="dropoffLocation" type="text" maxlength="180" placeholder="Nhập địa chỉ khách nhận hàng"><button class="gps-btn" type="button" id="dropoffGps">📍 GPS vị trí khách</button></div>
+<div class="gps-note">Bạn có thể nhập địa chỉ thủ công hoặc dùng GPS để lấy tọa độ. GPS lấy tọa độ hiện tại của thiết bị đang mở file (chỉ dùng khi thiết bị đang ở đúng địa điểm); bạn cũng có thể nhập địa chỉ thủ công. Trình duyệt cần được cấp quyền vị trí.</div>
+<h2>Bản đồ & lộ trình</h2>
+<div class="location-field"><button class="gps-btn" type="button" id="currentGps">📍 Lấy vị trí của tôi</button><button class="gps-btn secondary" type="button" id="routeBtn">🧭 Tính lộ trình</button></div>
+<div id="map" aria-label="Bản đồ lộ trình giao hàng"></div>
+<div id="mapStatus" class="map-status">Nhập địa chỉ lấy hàng và giao hàng, sau đó nhấn “Tính lộ trình”. Cho phép GPS để tính đoạn đường từ vị trí của bạn đến quán.</div>
+<h2>Quãng đường (tự tính theo đường bộ)</h2>
+<div class="field"><label for="customer">Từ quán đến khách (km)</label><input id="customer" type="number" min="0" step="0.1" value="0" readonly></div>
+<div class="field"><label for="shop">Từ chỗ bạn đến quán (km)</label><input id="shop" type="number" min="0" step="0.1" value="0" readonly></div>
+<div class="field"><label for="back">Từ khách chạy về (km, tùy chọn)</label><input id="back" type="number" min="0" step="0.1" value="0"></div>
+<label class="check"><input id="shopping" type="checkbox"> Có dịch vụ mua hộ (+ phí mua hộ)</label>
+<label class="check"><input id="express" type="checkbox"> Đơn hỏa tốc (+ phụ phí)</label>
+<label class="check"><input id="chargeBack" type="checkbox"> Tính phí cả chiều về</label>
+<h2>Phí đơn hàng (có thể chỉnh sửa)</h2>
+<div class="field"><label for="extraShip">Phí ship cộng thêm (nếu có) (đ)</label><input id="extraShip" type="number" min="0" value="0" placeholder="Nhập phí ship"></div>
+<div class="field"><label for="goodsCost">Tiền mua hàng (đ)</label><input id="goodsCost" type="number" min="0" value="0"></div>
+<div class="field"><label for="rate">Phí mỗi km (đ)</label><input id="rate" type="number" min="0" value="5000"></div>
+<div class="field"><label for="service">Phí mua hộ (đ)</label><input id="service" type="number" min="0" value="10000"></div>
+<div class="field"><label for="expressFee">Phí hỏa tốc (đ)</label><input id="expressFee" type="number" min="0" value="10000"></div>
+<h2>Chi phí xe Vario 125</h2>
+<div class="field"><label for="fuelPrice">Giá xăng/lít (đ)</label><input id="fuelPrice" type="number" min="0" value="27000"></div>
+<div class="field"><label for="efficiency">Mức chạy (km/lít)</label><input id="efficiency" type="number" min="1" value="40"></div>
+<div class="field"><label for="wear">Dự trù hao mòn (đ/km)</label><input id="wear" type="number" min="0" value="500"></div>
+<section class="result" aria-live="polite">
+<div class="line"><span class="muted">Tổng quãng đường thực chạy</span><b id="totalKm">8 km</b></div>
+<div class="line"><span class="muted">Km tính phí giao hàng</span><b id="billedKm">5 km</b></div>
+<div class="line"><span class="muted">Phí giao hàng theo km (tham khảo)</span><b id="delivery">25.000đ</b></div>
+<div class="line"><span class="muted">Phí mua hộ + hỏa tốc</span><b id="extras">10.000đ</b></div>
+<div class="line"><span class="muted">Phí ship cộng thêm</span><b id="extraShipDisplay">0đ</b></div>
+<div class="line"><span class="muted">Tiền mua hàng</span><b id="goodsCostDisplay">0đ</b></div>
+<div class="line"><span class="muted">Tiền xăng dự kiến</span><b id="fuel">5.400đ</b></div>
+<div class="line"><span class="muted">Dự trù hao mòn xe</span><b id="wearCost">4.000đ</b></div>
+<hr>
+<div class="line"><b>Còn lại sau xăng & hao mòn</b></div><div class="total" id="remaining">35.600đ</div>
+<hr>
+<div class="line"><b>Tổng khách thanh toán (gồm tiền hàng)</b></div><div class="total" id="total">45.000đ</div>
+</section>
+<button id="copy">Sao chép kết quả</button>
+<button class="install" id="installBtn" hidden>📲 Cài ứng dụng</button>
+<button id="saveOrder">Lưu đơn vào lịch sử</button>
+<button class="secondary" id="reset">Đặt lại mặc định</button>
+<section class="history">
+ <div class="line"><h2 style="margin:0">📋 Lịch sử đơn hàng</h2><button class="secondary" id="clearHistory" style="width:auto;margin:0;padding:8px 10px;font-size:.85rem">Xóa tất cả</button></div>
+ <div id="historyList" aria-live="polite"><div class="empty">Chưa có đơn hàng được lưu.</div></div>
+ <small>Lịch sử được lưu trên trình duyệt và thiết bị này; xóa dữ liệu trình duyệt có thể làm mất lịch sử.</small>
+</section>
+<small>Ước tính tham khảo. “Còn lại” chưa trừ tiền công, thời gian chờ và chi phí khác. Phí ship tự động tính = số km tính phí × phí mỗi km. Tổng khách thanh toán = tiền mua hàng + phí ship tự động + phí ship cộng thêm (nếu có) + phí mua hộ/hỏa tốc (nếu có). Hãy báo rõ phụ phí chiều về với khách trước khi nhận đơn.</small>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ids=['shop','customer','back','shopping','express','chargeBack','rate','service','expressFee','extraShip','goodsCost','fuelPrice','efficiency','wear'];
+const HISTORY_KEY='angi_order_history_v1';
+let lastCalc={};
+let history=[];
+let pickupCoords=null,dropoffCoords=null,currentCoords=null,routeLayer=null,markers=[];
+let map=null;
+function initMap(){if(!window.L){el('mapStatus').textContent='Không tải được bản đồ. Kiểm tra kết nối Internet rồi tải lại.';return;}map=L.map('map').setView([10.045,105.746],11);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);}
+function mapPoint(c,label){const m=L.marker([c.lat,c.lon]).addTo(map).bindPopup(label);markers.push(m);return m;}
+async function resolvePlace(input,coords){if(coords)return coords;const raw=input.trim();if(!raw)throw Error('Vui lòng nhập địa chỉ lấy hàng và địa chỉ khách.');const m=raw.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);if(m)return {lat:+m[1],lon:+m[2]};const url='https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=vn&q='+encodeURIComponent(raw+', Việt Nam');const r=await fetch(url,{headers:{'Accept-Language':'vi'}});if(!r.ok)throw Error('Không tìm được địa chỉ trên bản đồ. Hãy nhập địa chỉ rõ hơn hoặc dùng GPS.');const data=await r.json();if(!data.length)throw Error('Không tìm thấy địa chỉ: '+raw+'. Hãy thêm phường/xã, tỉnh hoặc dùng GPS.');return {lat:+data[0].lat,lon:+data[0].lon};}
+async function getRoute(a,b){const url=`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=full&geometries=geojson`;const r=await fetch(url);if(!r.ok)throw Error('Dịch vụ lộ trình hiện không phản hồi. Thử lại sau.');const d=await r.json();if(d.code!=='Ok'||!d.routes?.length)throw Error('Không có lộ trình đường bộ cho các vị trí đã chọn.');return d.routes[0];}
+async function calculateRoute(){const btn=el('routeBtn');btn.disabled=true;btn.textContent='Đang tính…';el('mapStatus').textContent='Đang xác định địa chỉ và tìm đường bộ…';try{if(!map)initMap();const pickup=await resolvePlace(el('pickupLocation').value,pickupCoords),dropoff=await resolvePlace(el('dropoffLocation').value,dropoffCoords);let first=null;if(currentCoords)first=await getRoute(currentCoords,pickup);const second=await getRoute(pickup,dropoff);const shopKm=first?first.distance/1000:0,customerKm=second.distance/1000;el('shop').value=shopKm.toFixed(1);el('customer').value=customerKm.toFixed(1);calc();markers.forEach(m=>map.removeLayer(m));markers=[];if(routeLayer)map.removeLayer(routeLayer);mapPoint(pickup,'📦 Vị trí lấy hàng');mapPoint(dropoff,'🏁 Vị trí khách');let lines=[];if(first){mapPoint(currentCoords,'📍 Vị trí hiện tại');lines.push(first.geometry.coordinates.map(p=>[p[1],p[0]]));}lines.push(second.geometry.coordinates.map(p=>[p[1],p[0]]));routeLayer=L.featureGroup(lines.map(ll=>L.polyline(ll,{weight:5})).concat(markers)).addTo(map);map.fitBounds(routeLayer.getBounds().pad(.15));el('mapStatus').textContent=(first?'Từ bạn đến quán: '+shopKm.toFixed(1)+' km · ':'')+'Từ quán đến khách: '+customerKm.toFixed(1)+' km · Phí ship theo km: '+money(lastCalc.delivery)+'. '+(first?'':'Chưa có GPS vị trí của bạn nên đoạn từ bạn đến quán chưa được tính.');}catch(e){el('mapStatus').textContent=e.message||'Có lỗi khi tính lộ trình.';}finally{btn.disabled=false;btn.textContent='🧭 Tính lộ trình';}}
+try{history=JSON.parse(localStorage.getItem(HISTORY_KEY)||'[]');if(!Array.isArray(history))history=[];}catch(e){history=[];}
+const el=id=>document.getElementById(id);
+const num=id=>Math.max(0,Number(el(id).value)||0);
+const money=n=>Math.round(n).toLocaleString('vi-VN')+'đ';
+function calc(){
+ const a=num('shop'),b=num('customer'),c=num('back'),km=a+b+c;
+ const billed=a+b+(el('chargeBack').checked?c:0);
+ const delivery=billed*num('rate');
+ const extras=(el('shopping').checked?num('service'):0)+(el('express').checked?num('expressFee'):0);
+ const extraShip=num('extraShip'),goodsCost=num('goodsCost');
+ const total=delivery+extras+extraShip+goodsCost;
+ const fuel=km*num('fuelPrice')/Math.max(1,num('efficiency'));
+ const wear=km*num('wear');
+ el('totalKm').textContent=km.toLocaleString('vi-VN')+' km';
+ el('billedKm').textContent=billed.toLocaleString('vi-VN')+' km';
+ el('delivery').textContent=money(delivery);
+ el('extras').textContent=money(extras);
+ el('total').textContent=money(total);
+ el('extraShipDisplay') && (el('extraShipDisplay').textContent=money(extraShip));
+ el('goodsCostDisplay') && (el('goodsCostDisplay').textContent=money(goodsCost));
+ el('fuel').textContent=money(fuel);
+ el('wearCost').textContent=money(wear);
+ const remaining=delivery+extraShip+extras-fuel-wear;
+ el('remaining').textContent=money(remaining);
+ el('remaining').style.color=remaining<0?'#c62828':'#0878c9';
+ lastCalc={km,billed,delivery,extras,extraShip,goodsCost,total,fuel,wear,remaining:delivery+extraShip+extras-fuel-wear};
+}
+function persistHistory(){localStorage.setItem(HISTORY_KEY,JSON.stringify(history));}
+function renderHistory(){
+ const list=el('historyList');list.replaceChildren();
+ if(!history.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='Chưa có đơn hàng được lưu.';list.appendChild(empty);return;}
+ history.forEach(order=>{
+  const card=document.createElement('article');card.className='history-card';
+  const head=document.createElement('div');head.className='history-head';
+  const info=document.createElement('div');
+  const name=document.createElement('b');name.textContent=order.name||'Đơn hàng';
+  const meta=document.createElement('div');meta.className='history-meta';meta.textContent=new Date(order.time).toLocaleString('vi-VN');
+  info.append(name,meta);
+  const del=document.createElement('button');del.className='delete-one';del.type='button';del.textContent='Xóa';del.dataset.delete=order.id;head.append(info,del);
+  const total=document.createElement('div');total.className='history-total';total.textContent='Tổng phí: '+money(order.total);
+  const detail=document.createElement('div');detail.className='history-detail';detail.textContent=`Quãng đường: ${order.km.toLocaleString('vi-VN')} km · Phí ship theo km: ${money(order.delivery||0)} · Phí ship cộng thêm: ${money(order.extraShip||0)} · Mua hộ + hỏa tốc: ${money(order.extras)} · Tiền mua hàng: ${money(order.goodsCost||0)} · Còn lại sau xăng & hao mòn: ${money(order.remaining)}`;
+  card.append(head,total);
+  if(order.pickupLocation){const pickup=document.createElement('div');pickup.className='history-detail';pickup.textContent='📍 Lấy hàng: '+order.pickupLocation;card.appendChild(pickup);}
+  if(order.pickupCoords){const a=document.createElement('a');a.href=`https://www.google.com/maps?q=${order.pickupCoords.lat},${order.pickupCoords.lon}`;a.target='_blank';a.rel='noopener';a.textContent='Mở vị trí lấy hàng trên bản đồ';card.appendChild(a);}
+  if(order.dropoffLocation){const dropoff=document.createElement('div');dropoff.className='history-detail';dropoff.textContent='🏁 Khách nhận: '+order.dropoffLocation;card.appendChild(dropoff);}
+  if(order.dropoffCoords){const a=document.createElement('a');a.href=`https://www.google.com/maps?q=${order.dropoffCoords.lat},${order.dropoffCoords.lon}`;a.target='_blank';a.rel='noopener';a.textContent='Mở vị trí khách trên bản đồ';card.appendChild(a);}
+  card.append(detail);list.appendChild(card);
+ });
+}
+function locate(target){
+ if(!navigator.geolocation){alert('Trình duyệt này không hỗ trợ GPS. Bạn có thể nhập địa chỉ thủ công.');return;}
+ const btn=el(target==='pickup'?'pickupGps':'dropoffGps');btn.disabled=true;btn.textContent='Đang định vị…';
+ navigator.geolocation.getCurrentPosition(pos=>{
+  const coords={lat:Number(pos.coords.latitude.toFixed(6)),lon:Number(pos.coords.longitude.toFixed(6))};
+  if(target==='pickup'){pickupCoords=coords;if(!el('pickupLocation').value.trim())el('pickupLocation').value='Tọa độ GPS: '+coords.lat+', '+coords.lon;}
+  else{dropoffCoords=coords;if(!el('dropoffLocation').value.trim())el('dropoffLocation').value='Tọa độ GPS: '+coords.lat+', '+coords.lon;}
+  btn.disabled=false;btn.textContent=target==='pickup'?'📍 GPS vị trí lấy':'📍 GPS vị trí khách';
+ },err=>{btn.disabled=false;btn.textContent=target==='pickup'?'📍 GPS vị trí lấy':'📍 GPS vị trí khách';alert(err.code===1?'Bạn chưa cấp quyền vị trí. Hãy cho phép GPS hoặc nhập địa chỉ thủ công.':'Không lấy được vị trí. Hãy kiểm tra GPS và thử lại, hoặc nhập địa chỉ thủ công.');},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});
+}
+el('currentGps').addEventListener('click',()=>{const b=el('currentGps');if(!navigator.geolocation){el('mapStatus').textContent='Thiết bị không hỗ trợ GPS.';return;}b.disabled=true;b.textContent='Đang định vị…';navigator.geolocation.getCurrentPosition(p=>{currentCoords={lat:+p.coords.latitude.toFixed(6),lon:+p.coords.longitude.toFixed(6)};b.disabled=false;b.textContent='📍 Lấy vị trí của tôi';el('mapStatus').textContent='Đã lấy GPS. Nhấn “Tính lộ trình” để tính km từ bạn đến quán và từ quán đến khách.';if(map){map.setView([currentCoords.lat,currentCoords.lon],14);mapPoint(currentCoords,'📍 Vị trí hiện tại');}},()=>{b.disabled=false;b.textContent='📍 Lấy vị trí của tôi';el('mapStatus').textContent='Không lấy được GPS. Hãy cấp quyền vị trí và thử lại.';},{enableHighAccuracy:true,timeout:15000,maximumAge:60000});});
+el('routeBtn').addEventListener('click',calculateRoute);
+el('pickupGps').addEventListener('click',()=>locate('pickup'));
+el('dropoffGps').addEventListener('click',()=>locate('dropoff'));
+ids.forEach(id=>el(id).addEventListener('input',calc));
+el('saveOrder').addEventListener('click',()=>{
+ const o={id:String(Date.now())+'-'+Math.random().toString(36).slice(2,7),time:new Date().toISOString(),name:el('orderName').value.trim(),pickupLocation:el('pickupLocation').value.trim(),dropoffLocation:el('dropoffLocation').value.trim(),pickupCoords,dropoffCoords,km:lastCalc.km,billed:lastCalc.billed,delivery:lastCalc.delivery,extras:lastCalc.extras,extraShip:lastCalc.extraShip,goodsCost:lastCalc.goodsCost,total:lastCalc.total,fuel:lastCalc.fuel,wear:lastCalc.wear,remaining:lastCalc.remaining};
+ history.unshift(o);history=history.slice(0,100);
+ try{persistHistory();renderHistory();el('saveOrder').textContent='Đã lưu đơn!';setTimeout(()=>el('saveOrder').textContent='Lưu đơn vào lịch sử',1500);}catch(e){history.shift();alert('Không thể lưu lịch sử trên trình duyệt này.');}
+});
+el('historyList').addEventListener('click',e=>{
+ const btn=e.target.closest('button[data-delete]');if(!btn)return;
+ history=history.filter(o=>o.id!==btn.dataset.delete);try{persistHistory();renderHistory();}catch(err){alert('Không thể cập nhật lịch sử.');}
+});
+el('clearHistory').addEventListener('click',()=>{
+ if(!history.length)return;
+ if(confirm('Bạn có chắc muốn xóa toàn bộ lịch sử đơn hàng?')){history=[];try{persistHistory();renderHistory();}catch(e){alert('Không thể xóa lịch sử.');}}
+});
+el('copy').addEventListener('click',async()=>{
+ const text=`ĂN GÌ EM MUA\nTên khách / ghi chú: ${el('orderName').value.trim()||'Không có'}\nVị trí lấy hàng: ${el('pickupLocation').value.trim()||'Không có'}\nVị trí giao hàng: ${el('dropoffLocation').value.trim()||'Không có'}\nGPS lấy hàng: ${pickupCoords?pickupCoords.lat+', '+pickupCoords.lon:'Không có'}\nGPS khách: ${dropoffCoords?dropoffCoords.lat+', '+dropoffCoords.lon:'Không có'}\nQuãng đường thực chạy: ${el('totalKm').textContent}\nPhí ship tự tính theo km: ${el('delivery').textContent}\nPhí ship cộng thêm: ${money(num('extraShip'))}\nPhí mua hộ + hỏa tốc: ${el('extras').textContent}\nTiền mua hàng: ${money(num('goodsCost'))}\nTổng khách thanh toán: ${el('total').textContent}\nTiền xăng dự kiến: ${el('fuel').textContent}\nCòn lại sau xăng và hao mòn: ${el('remaining').textContent}`;
+ try{await navigator.clipboard.writeText(text);el('copy').textContent='Đã sao chép!';}catch(e){const t=document.createElement('textarea');t.value=text;document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();el('copy').textContent='Đã sao chép!';}
+ setTimeout(()=>el('copy').textContent='Sao chép kết quả',1800);
+});
+el('reset').addEventListener('click',()=>{
+ el('orderName').value='';el('pickupLocation').value='';el('dropoffLocation').value='';pickupCoords=null;dropoffCoords=null;currentCoords=null;if(routeLayer&&map)map.removeLayer(routeLayer);markers.forEach(m=>map&&map.removeLayer(m));markers=[];routeLayer=null;el('mapStatus').textContent='Nhập địa chỉ lấy hàng và giao hàng, sau đó nhấn “Tính lộ trình”.';
+ const defaults={shop:0,customer:0,back:0,shopping:false,express:false,chargeBack:false,rate:5000,service:10000,expressFee:10000,extraShip:0,goodsCost:0,fuelPrice:27000,efficiency:40,wear:500};
+ Object.entries(defaults).forEach(([id,v])=>{if(el(id).type==='checkbox')el(id).checked=v;else el(id).value=v;});calc();
+});
+let installPrompt=null;window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;el('installBtn').hidden=false;});el('installBtn').addEventListener('click',async()=>{if(!installPrompt){alert('Nếu chưa hiện lời mời cài đặt, mở menu trình duyệt và chọn “Thêm vào màn hình chính”.');return;}installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;el('installBtn').hidden=true;});
+calc();
+renderHistory();
+initMap();
+if('serviceWorker' in navigator && location.protocol.startsWith('http'))navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body>
+</html>
